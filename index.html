@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ศิลปะและวัฒนธรรมไทย</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+Thai:wght@100..900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans Thai', 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            color: #333;
+        }
+        .page-view {
+            display: none;
+            min-height: calc(100vh - 80px);
+            padding-top: 20px;
+        }
+        .page-view.active {
+            display: block;
+        }
+        .card {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background-color: #A52A2A; 
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #8B1A1A;
+        }
+        .input-field {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        .input-field:focus {
+            border-color: #A52A2A;
+            outline: none;
+        }
+        .placeholder-box {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px; 
+            background-color: #e0e0e0;
+            color: #333;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9rem;
+            border: 2px dashed #a52a2a;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <nav id="navbar" class="bg-white shadow-md sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center">
+                <a href="#" onclick="navigateTo('home')" class="text-2xl font-bold text-[#A52A2A]">
+                    <i data-lucide="lotus" class="inline-block mr-2 w-6 h-6"></i>
+                    วัฒนธรรมไทย
+                </a>
+            </div>
+            <div id="nav-links" class="hidden md:flex space-x-4">
+                </div>
+            <button id="mobile-menu-button" class="md:hidden p-2 text-gray-700 rounded-lg hover:bg-gray-100" onclick="window.toggleMobileMenu()">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+        </div>
+        <div id="mobile-menu" class="hidden md:hidden bg-white shadow-lg">
+            </div>
+    </nav>
+
+    <main id="app-container" class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+        <div id="message-box" class="fixed top-24 right-4 z-50 p-4 rounded-lg shadow-lg text-white hidden"></div>
+
+        <section id="home-page" class="page-view active">
+            </section>
+        <section id="temples-page" class="page-view">
+        </section>
+
+       <section id="festivals-page" class="page-view">
+            </section>
+
+        <section id="amulets-games-page" class="page-view">
+            </section>
+        
+        <section id="login-page" class="page-view">
+            </section>
+        ><section id="signup-page" class="page-view">
+            </section>
+        
+        <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-75 flex justify-center items-center z-50 hidden">
+            <div class="border-4 border-t-4 border-gray-200 border-t-red-700 rounded-full w-12 h-12 animate-spin"></div>
+        </div>
+    </main>
+
+    <footer class="bg-[#A52A2A] text-white mt-8 p-4 text-center">
+        <p class="text-sm">&copy; 2025 ศิลปะและวัฒนธรรมไทย | นำเสนอโดย <strong>พีรพัฒน์ 67162110530-9</strong></p>
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            setLogLevel 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ตั้งค่าตัวแปร Global จาก Canvas Environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+        
+        const USER_PROFILES_COLLECTION = `artifacts/${appId}/public/data/user_profiles`;
+        
+        async function exponentialBackoffFetch(url, options, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429 || response.status >= 500) {
+
+                        throw new Error(`Server error or rate limited: ${response.status}`);
+                    }
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        throw new Error(`API Error: ${errorBody.error?.message || 'Unknown error'}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === maxRetries - 1) {
+                        throw error;
+                    }
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        function toggleMobileMenu() {
+            document.getElementById('mobile-menu').classList.toggle('hidden');
+        }
+        window.toggleMobileMenu = toggleMobileMenu;
+
+        function showMessage(text, isError = false) {
+            const box = document.getElementById('message-box');
+            box.textContent = text;
+            box.className = 'fixed top-24 right-4 z-50 p-4 rounded-lg shadow-lg text-white transition-all duration-300';
+            box.classList.remove('hidden');
+            if (isError) {
+                box.style.backgroundColor = '#dc2626'; // Red
+            } else {
+                box.style.backgroundColor = '#16a34a'; // Green
+            }
+
+            // ซ่อนกล่องข้อความหลังจาก 4 วินาที
+            setTimeout(() => {
+                box.classList.add('hidden');
+            }, 4000);
+        }
+
+        // Loading Spinner
+        function toggleLoading(show) {
+            document.getElementById('loading-overlay').classList.toggle('hidden', !show);
+        }
+
+        function updateNavigation(isLoggedIn) {
+            const navLinks = document.getElementById('nav-links');
+            const mobileMenu = document.getElementById('mobile-menu');
+            
+            const commonLinks = [
+                { name: 'หน้าหลัก', view: 'home', icon: 'home' },
+                { name: 'วัดไทย', view: 'temples', icon: 'landmark' },
+                { name: 'เทศกาล/ประเพณี', view: 'festivals', icon: 'gift' },
+                { name: 'พระเครื่อง/กีฬา', view: 'amulets-games', icon: 'medal' },
+            ];
+
+            const authLinks = isLoggedIn
+                ? [{ name: 'ออกจากระบบ', action: 'logout', icon: 'log-out' }]
+                : [
+                    { name: 'เข้าสู่ระบบ', view: 'login', icon: 'log-in' },
+                    { name: 'ลงทะเบียน', view: 'signup', icon: 'user-plus' }
+                ];
+            
+            const allLinks = [...commonLinks, ...authLinks];
+
+            const renderLink = (link, isMobile = false) => {
+                const baseClass = isMobile 
+                    ? "block px-4 py-2 text-gray-700 hover:bg-gray-100" 
+                    : "text-gray-700 hover:text-[#A52A2A] font-medium transition duration-150 flex items-center";
+                
+                let html = `<a href="#" class="${baseClass}" `;
+                
+                if (link.action === 'logout') {
+                    html += `onclick="window.logoutUser()">`;
+                } else {
+                    html += `onclick="window.navigateTo('${link.view}')">`;
+                }
+                
+                html += `<i data-lucide="${link.icon}" class="inline-block mr-2 w-5 h-5 text-current"></i>${link.name}</a>`;
+                return html;
+            };
+
+            // Desktop Menu
+            navLinks.innerHTML = allLinks.map(link => renderLink(link)).join('');
+
+            // Mobile Menu
+            mobileMenu.innerHTML = `<div class="p-4">${allLinks.map(link => renderLink(link, true)).join('')}</div>`;
+
+            // Re-render lucide icons
+            lucide.createIcons();
+        }
+
+        //(Single-Page Application Logic)
+        function navigateTo(viewName) {
+            document.querySelectorAll('.page-view').forEach(page => {
+                page.classList.remove('active');
+            });
+            const targetPage = document.getElementById(`${viewName}-page`);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            } else {
+                console.error(`Page view not found: ${viewName}-page`);
+                document.getElementById('home-page').classList.add('active');
+            }
+            document.getElementById('mobile-menu').classList.add('hidden');
+        }
+
+        async function initializeFirebase() {
+            if (!Object.keys(firebaseConfig).length) {
+                console.warn("ไม่พบการตั้งค่า Firebase: ระบบ Login/Signup จะไม่ทำงาน แต่ส่วนเนื้อหาจะยังคงทำงาน");
+                isAuthReady = true;
+                updateNavigation(false);
+                navigateTo('home');
+                toggleLoading(false);
+                return;
+            }
+            try {
+                // setLogLevel('Debug'); // เปิดการดีบักสำหรับ Firestore
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        if (!isAuthReady) {
+                             navigateTo('home');
+                        }
+                    } else {
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    }
+                    isAuthReady = true;
+                    toggleLoading(false);
+                    updateNavigation(!!user);
+                    if (!user) {
+                         navigateTo('login');
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                showMessage(`ข้อผิดพลาดในการตั้งค่า Firebase: ${error.message}`, true);
+                isAuthReady = true;
+                updateNavigation(false);
+                navigateTo('login');
+                toggleLoading(false);
+            }
+        }
+
+        // Logout
+        async function logoutUser() {
+            try {
+                await signOut(auth);
+                showMessage("ออกจากระบบสำเร็จ", false);
+                userId = null;
+                updateNavigation(false);
+                navigateTo('login');
+            } catch (error) {
+                console.error("Logout Error:", error);
+                showMessage(`ข้อผิดพลาดในการออกจากระบบ: ${error.message}`, true);
+            }
+        }
+
+
+        // (Signup)
+        async function registerUser(event) {
+            event.preventDefault();
+            if (!Object.keys(firebaseConfig).length) {
+                showMessage("ไม่สามารถลงทะเบียนได้: การตั้งค่า Firebase ไม่พร้อมใช้งาน", true);
+                return;
+            }
+            if (!isAuthReady) return showMessage("ระบบยังไม่พร้อม", true);
+            toggleLoading(true);
+
+            try {
+                const form = event.target;
+                const username = form.username.value;
+                const userData = {
+                    firstName: form.firstName.value,
+                    lastName: form.lastName.value,
+                    province: form.province.value,
+                    nationality: form.nationality.value,
+                    username: username,
+                    registeredAt: new Date().toISOString()
+                };
+
+                const checkDocRef = doc(db, USER_PROFILES_COLLECTION, username);
+                const checkDocSnap = await getDoc(checkDocRef);
+                
+                if (checkDocSnap.exists()) {
+                    showMessage("ชื่อผู้ใช้นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น", true);
+                    return;
+                }
+
+                await setDoc(checkDocRef, userData);
+
+                showMessage("ลงทะเบียนสำเร็จ! โปรดเข้าสู่ระบบ", false);
+                navigateTo('login');
+
+            } catch (error) {
+                console.error("Signup Error:", error);
+                showMessage(`ข้อผิดพลาดในการลงทะเบียน: ${error.message}`, true);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        //  (Login)
+        async function loginUser(event) {
+            event.preventDefault();
+            if (!Object.keys(firebaseConfig).length) {
+                showMessage("ไม่สามารถเข้าสู่ระบบได้: การตั้งค่า Firebase ไม่พร้อมใช้งาน", true);
+                return;
+            }
+            if (!isAuthReady) return showMessage("ระบบยังไม่พร้อม", true);
+            toggleLoading(true);
+
+            try {
+                const form = event.target;
+                const username = form.username.value;
+                const password = form.password.value;
+                
+                const profileDocRef = doc(db, USER_PROFILES_COLLECTION, username);
+                const docSnap = await getDoc(profileDocRef);
+
+                if (docSnap.exists() && password === '1234') { // รหัสผ่านจำลอง: 1234
+                    showMessage(`เข้าสู่ระบบสำเร็จ! ยินดีต้อนรับ ${username}`, false);
+                    updateNavigation(true);
+                    navigateTo('home');
+                } else {
+                    showMessage("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง (รหัสผ่านจำลองคือ '1234')", true);
+                }
+
+            } catch (error) {
+                console.error("Login Error:", error);
+                showMessage(`ข้อผิดพลาดในการเข้าสู่ระบบ: ${error.message}`, true);
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        window.navigateTo = navigateTo;
+        window.registerUser = registerUser;
+        window.loginUser = loginUser;
+        window.logoutUser = logoutUser;
+        window.toggleMobileMenu = toggleMobileMenu;
+        
+        const createContentCard = (title, description, imageUrl, icon) => { 
+            const imageHtml = imageUrl && imageUrl.startsWith('http')
+                ? `<img src="${imageUrl}" alt="${title}" class="w-full h-auto object-cover rounded-lg shadow-xl" />`
+                : `<div class="placeholder-box">**ตำแหน่งใส่ URL รูปภาพ**<br/>${title}<br/>(ปัจจุบันใช้ข้อความกำกับแทนรูปภาพ)</div>`;
+
+            return `
+                <div class="card p-6 flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
+                    <div class="md:w-1/3">
+                        ${imageHtml}
+                    </div>
+                    <div class="md:w-2/3">
+                        <h3 class="text-2xl font-bold text-[#A52A2A] mb-2 flex items-center">
+                            <i data-lucide="${icon}" class="mr-2 w-6 h-6"></i> ${title}
+                        </h3>
+                        <div class="text-gray-600 leading-relaxed">${description}</div>
+                    </div>
+                </div>
+            `;
+        };
+        
+        
+        const renderHomePage = () => {
+            document.getElementById('home-page').innerHTML = `
+                <div class="py-12">
+                    <header class="text-center mb-12">
+                        <h1 class="text-5xl font-extrabold text-[#A52A2A] mb-4">
+                            <i data-lucide="sun" class="inline-block w-8 h-8 mr-2 text-yellow-500"></i>
+                            ดินแดนแห่งรอยยิ้ม
+                        </h1>
+                        <p class="text-xl text-gray-600 max-w-3xl mx-auto">
+                            สำรวจความงดงามและความลึกซึ้งของศิลปะและวัฒนธรรมไทยที่สืบทอดกันมายาวนาน
+                        </p>
+                    </header>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <!-- Card 1: วัด -->
+                        <a href="#" onclick="navigateTo('temples')" class="card text-center p-6 hover:shadow-xl transition duration-300">
+                            <i data-lucide="landmark" class="w-12 h-12 mx-auto text-yellow-700 mb-4"></i>
+                            <h3 class="text-xl font-bold text-[#A52A2A] mb-2">วัดไทย</h3>
+                            <p class="text-gray-600 mb-4">ศูนย์รวมจิตใจและสถาปัตยกรรมที่งดงาม</p>
+                            <span class="text-[#A52A2A] font-semibold flex items-center justify-center">
+                                ดูเพิ่มเติม <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
+                            </span>
+                        </a>
+                        <!-- Card 2: ประเพณี -->
+                        <a href="#" onclick="navigateTo('festivals')" class="card text-center p-6 hover:shadow-xl transition duration-300">
+                            <i data-lucide="gift" class="w-12 h-12 mx-auto text-pink-700 mb-4"></i>
+                            <h3 class="text-xl font-bold text-[#A52A2A] mb-2">เทศกาลและประเพณี</h3>
+                            <p class="text-gray-600 mb-4">สีสันแห่งวัฒนธรรม เช่น สงกรานต์ ลอยกระทง</p>
+                            <span class="text-[#A52A2A] font-semibold flex items-center justify-center">
+                                ดูเพิ่มเติม <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
+                            </span>
+                        </a>
+                        <!-- Card 3: พระเครื่อง/กีฬา -->
+                        <a href="#" onclick="navigateTo('amulets-games')" class="card text-center p-6 hover:shadow-xl transition duration-300">
+                            <i data-lucide="medal" class="w-12 h-12 mx-auto text-green-700 mb-4"></i>
+                            <h3 class="text-xl font-bold text-[#A52A2A] mb-2">พระเครื่องและกีฬาไทย</h3>
+                            <p class="text-gray-600 mb-4">มรดกความเชื่อและศิลปะการต่อสู้</p>
+                            <span class="text-[#A52A2A] font-semibold flex items-center justify-center">
+                                ดูเพิ่มเติม <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
+                            </span>
+                        </a>
+                    </div>
+                </div>
+            `;
+        };
+        
+        
+        const renderTemplesPage = () => {
+            const content = [
+        createContentCard(
+            "วัดพระแก้ว (Wat Phra Kaew)", 
+            "เป็นที่ประดิษฐานพระพุทธมหามณีรัตนปฏิมากร (พระแก้วมรกต) ถือเป็นวัดที่สำคัญที่สุดในประเทศไทย และเป็นสถาปัตยกรรมที่วิจิตรตระการตาที่สุดแห่งหนึ่ง", 
+            "https://upload.wikimedia.org/wikipedia/commons/c/c1/Wat_Phra_Kaew_by_Ninara_TSP_edit_crop.jpg",
+            "mountain"
+        ),
+        createContentCard(
+            "วัดอรุณราชวราราม (Wat Arun)", 
+            "วัดที่มีพระปรางค์สูงสง่าริมแม่น้ำเจ้าพระยา ประดับด้วยเครื่องกระเบื้องเคลือบและเครื่องถ้วยชามเบญจรงค์ เป็นหนึ่งในสัญลักษณ์สำคัญของกรุงเทพฯ", 
+            "https://i0.wp.com/greennews.agency/wp-content/uploads/2025/04/World-Herriitage-250425_7.jpeg?resize=1024%2C683&ssl=1",
+            "waves"
+        ),
+        createContentCard(
+            "วัดพระธาตุดอยสุเทพ (Wat Phra That Doi Suthep)", 
+            "วัดคู่บ้านคู่เมืองเชียงใหม่ ตั้งอยู่บนดอยสุเทพ มองเห็นทิวทัศน์เมืองเชียงใหม่ได้เกือบทั้งหมด เจดีย์สีทองอร่ามเป็นที่เคารพสักการะ", 
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Wat_Phra_That_Doi_Suthep_%28I%29.jpg/1280px-Wat_Phra_That_Doi_Suthep_%28I%29.jpg",
+            "cloud-sun"
+        ),
+        ].join('<div class="my-8 border-b border-gray-200"></div>');
+
+            document.getElementById('temples-page').innerHTML = `
+                <div class="py-12">
+                    <h2 class="text-4xl font-extrabold text-[#A52A2A] mb-8 text-center border-b pb-4">
+                        <i data-lucide="landmark" class="inline-block mr-2 w-8 h-8"></i>
+                        วัดไทย: ศูนย์รวมจิตใจและสถาปัตยกรรม
+                    </h2>
+                    <div class="space-y-12">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        };
+
+        
+        const renderFestivalsPage = () => {
+            const content = [
+        createContentCard(
+            "ประเพณีสงกรานต์", 
+            "เทศกาลขึ้นปีใหม่ไทยที่มีชื่อเสียงไปทั่วโลก โดยมีการสาดน้ำเพื่อขอพรและชำระล้างสิ่งไม่ดีออกจากตัว...", 
+            "https://upload.wikimedia.org/wikipedia/commons/6/69/US_Navy_100417-N-7280V-204_Thai_dancers_in_traditional_dress_perform_a_cleansing_ritual_for_Sailors_assigned_to_the_U.S._7th_Fleet_command_ship_USS_Blue_Ridge_%28LCC_19%29.jpg",
+            "droplet"
+        ),
+        createContentCard(
+            "ประเพณีลอยกระทง", 
+            "จัดขึ้นในวันเพ็ญเดือนสิบสองเพื่อขอขมาพระแม่คงคา การลอยกระทงเป็นการสะเดาะเคราะห์...", 
+            "https://upload.wikimedia.org/wikipedia/commons/5/5e/Loi_Krathong_2010_John_Shedrick.jpg",
+            "moon"
+        ),
+        createContentCard(
+            "ประเพณีแห่เทียนพรรษา", 
+            "จัดขึ้นในช่วงเข้าพรรษา โดยชาวบ้านจะร่วมกันแกะสลักเทียนขนาดใหญ่เพื่อนำไปถวายวัด...", 
+            "https://upload.wikimedia.org/wikipedia/commons/7/7a/Candlefestivalfloat.jpg",
+            "flame"
+        ),
+        ].join('<div class="my-8 border-b border-gray-200"></div>');
+
+            document.getElementById('festivals-page').innerHTML = `
+                <div class="py-12">
+                    <h2 class="text-4xl font-extrabold text-[#A52A2A] mb-8 text-center border-b pb-4">
+                        <i data-lucide="gift" class="inline-block mr-2 w-8 h-8"></i>
+                        เทศกาลและประเพณี: มรดกทางวัฒนธรรม
+                    </h2>
+                    <div class="space-y-12">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        };
+        
+        const renderAmuletsGamesPage = () => {
+            const content = [
+        createContentCard(
+            "พระเครื่อง", 
+            "วัตถุมงคลขนาดเล็กที่สร้างขึ้นเพื่อบูชาพระพุทธเจ้า หรือพระสงฆ์ที่เคารพ เพื่อความเป็นสิริมงคล...", 
+            "https://upload.wikimedia.org/wikipedia/commons/b/b4/%E0%B8%9E%E0%B8%A3%E0%B8%A3%E0%B8%82%E0%B9%80%E0%B8%84%E0%B8%A3%E0%B9%88%E0%B8%AD%E0%B8%87%E0%B8%A7%E0%B8%B1%E0%B8%94%E0%B8%A3%E0%B8%B0%E0%B8%8B%E0%B8%B1%E0%B8%87_%28214_%E0%B8%9B%E0%B8%B5%E0%B8%8A%E0%B8%B2%E0%B8%95%E0%B8%81%E0%B8%B2%E0%B8%A5%29_01.jpg",
+            "hand-heart"
+        ),
+        createContentCard(
+            "มวยไทย (Muay Thai)", 
+            "ศิลปะการต่อสู้ประจำชาติไทย หรือ 'ศาสตร์แห่งอาวุธทั้ง 8' ที่ใช้หมัด ศอก เข่า และเท้า...", 
+            "https://upload.wikimedia.org/wikipedia/commons/9/9a/Muay_Thai_Fight_Us_Vs_Burma_%2880668065%29.jpeg",
+            "punch-dame"
+        ),
+        createContentCard(
+            "หมากรุกไทย", 
+            "เกมกระดานเชิงกลยุทธ์ที่คล้ายกับหมากรุกสากล แต่มีรูปแบบการเดินและกติกาที่เป็นเอกลักษณ์...", 
+            "https://upload.wikimedia.org/wikipedia/commons/7/77/Makruk_Thai_1.JPG", 
+            "board"
+        ),
+        ].join('<div class="my-8 border-b border-gray-200"></div>');
+
+            document.getElementById('amulets-games-page').innerHTML = `
+                <div class="py-12">
+                    <h2 class="text-4xl font-extrabold text-[#A52A2A] mb-8 text-center border-b pb-4">
+                        <i data-lucide="medal" class="inline-block mr-2 w-8 h-8"></i>
+                        พระเครื่อง, กีฬา, และการละเล่นพื้นบ้าน
+                    </h2>
+                    <div class="space-y-12">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        };
+        
+        
+        const renderLoginPage = () => {
+            const isLoggedIn = !!auth?.currentUser;
+            const message = isLoggedIn 
+                ? `<div class="p-4 bg-green-100 text-green-700 rounded-lg"><i data-lucide="check-circle" class="w-5 h-5 inline mr-2"></i> คุณเข้าสู่ระบบแล้ว</div>`
+                : `<div class="p-4 bg-red-100 text-red-700 rounded-lg"><i data-lucide="alert-triangle" class="w-5 h-5 inline mr-2"></i> กรุณาเข้าสู่ระบบเพื่อใช้ฟีเจอร์เต็มรูปแบบ (ใช้รหัสผ่านจำลอง: 1234)</div>`;
+                
+            document.getElementById('login-page').innerHTML = `
+                <div class="max-w-md mx-auto py-12">
+                    <div class="card p-8">
+                        <h2 class="text-3xl font-bold text-center text-[#A52A2A] mb-6">
+                            <i data-lucide="log-in" class="inline-block w-7 h-7 mr-2"></i> เข้าสู่ระบบ
+                        </h2>
+                        ${message}
+                        <form onsubmit="window.loginUser(event)" class="mt-6">
+                            <div class="mb-4">
+                                <label for="login-username" class="block text-gray-700 font-medium mb-2">ชื่อผู้ใช้ (Username)</label>
+                                <input type="text" id="login-username" name="username" class="input-field" required>
+                            </div>
+                            <div class="mb-6">
+                                <label for="login-password" class="block text-gray-700 font-medium mb-2">รหัสผ่าน (Password)</label>
+                                <input type="password" id="login-password" name="password" class="input-field" value="1234" required>
+                                <p class="text-sm text-gray-500 mt-1">รหัสผ่านจำลอง: 1234</p>
+                            </div>
+                            <button type="submit" class="btn-primary w-full">เข้าสู่ระบบ</button>
+                        </form>
+                        <p class="text-center text-gray-600 mt-4">
+                            ยังไม่มีบัญชี? 
+                            <a href="#" onclick="navigateTo('signup')" class="text-[#A52A2A] hover:underline font-semibold">ลงทะเบียนที่นี่</a>
+                        </p>
+                    </div>
+                </div>
+            `;
+        };
+        
+        
+        const renderSignupPage = () => {
+            document.getElementById('signup-page').innerHTML = `
+                <div class="max-w-lg mx-auto py-12">
+                    <div class="card p-8">
+                        <h2 class="text-3xl font-bold text-center text-[#A52A2A] mb-6">
+                            <i data-lucide="user-plus" class="inline-block w-7 h-7 mr-2"></i> ลงทะเบียน
+                        </h2>
+                        <form onsubmit="window.registerUser(event)" class="mt-6 space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="signup-firstName" class="block text-gray-700 font-medium mb-1">ชื่อจริง</label>
+                                    <input type="text" id="signup-firstName" name="firstName" class="input-field" required>
+                                </div>
+                                <div>
+                                    <label for="signup-lastName" class="block text-gray-700 font-medium mb-1">นามสกุล</label>
+                                    <input type="text" id="signup-lastName" name="lastName" class="input-field" required>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="signup-username" class="block text-gray-700 font-medium mb-1">ชื่อผู้ใช้ (Username)</label>
+                                <input type="text" id="signup-username" name="username" class="input-field" required>
+                                <p class="text-sm text-gray-500 mt-1">ใช้ชื่อผู้ใช้นี้ในการเข้าสู่ระบบ</p>
+                            </div>
+                            <div>
+                                <label for="signup-province" class="block text-gray-700 font-medium mb-1">จังหวัด</label>
+                                <input type="text" id="signup-province" name="province" class="input-field" required>
+                            </div>
+                            <div>
+                                <label for="signup-nationality" class="block text-gray-700 font-medium mb-1">สัญชาติ</label>
+                                <input type="text" id="signup-nationality" name="nationality" class="input-field" required>
+                            </div>
+                            <div class="pt-2">
+                                <button type="submit" class="btn-primary w-full">ลงทะเบียน</button>
+                            </div>
+                        </form>
+                        <p class="text-center text-gray-600 mt-4">
+                            มีบัญชีอยู่แล้ว? 
+                            <a href="#" onclick="navigateTo('login')" class="text-[#A52A2A] hover:underline font-semibold">เข้าสู่ระบบ</a>
+                        </p>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderPages = () => {
+            renderHomePage();
+            renderTemplesPage();
+            renderFestivalsPage();
+            renderAmuletsGamesPage();
+            renderLoginPage();
+            renderSignupPage();
+            lucide.createIcons();
+        };
+
+        window.onload = function () {
+            toggleLoading(true);
+            renderPages();
+            initializeFirebase();
+        };
+    </script>
+</body>
+</html>
